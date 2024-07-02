@@ -22,7 +22,7 @@ do
     DATA_DEV="/dev/"$DATA_NAME""
     DATA_PAT="/dev/"$DATA_PAT_NAME""
 
-    JOURNAL_PAT_NAME=""$JOURNAL_NAME"1"
+    JOURNAL_PAT_NAME=""$JOURNAL_NAME"p2"
     JOURNAL_DEV="/dev/"$JOURNAL_NAME""
     JOURNAL_PAT="/dev/"$JOURNAL_PAT_NAME""
 
@@ -33,10 +33,10 @@ do
     ./disablemeta.sh
 
     ###format mount
-    printf "n\np\n1\n\n+35G\nw\n" | sudo fdisk $DATA_DEV
-    printf "n\np\n1\n\n+2G\nw\n" | sudo fdisk $JOURNAL_DEV
+    printf "n\np\n1\n1\n+35G\nw\n" | sudo fdisk $DATA_DEV
+    printf "n\np\n1\n2\n+2G\nw\n" | sudo fdisk $JOURNAL_DEV
 
-    mkfs.ext4 -F -O journal_dev -b 4096 $JOURNAL_PAT 
+    mkfs.ext4 -F -O journal_dev -b 4096 $JOURNAL_PAT
     mkfs.ext4 -F -J device=$JOURNAL_PAT -m 0 -b 4096 $DATA_PAT
 
     mount -o nodelalloc $DATA_PAT $TARGET_FOLDER
@@ -53,7 +53,7 @@ do
 
     echo $APPEND_SIZE $DUMMYAPPEND_SIZE $WRITE_COUNT
 
-    ./"$EXE_PATH" 
+    ./"$EXE_PATH"
 
     rm -rf $TARGET_FOLDER/D*
 
@@ -63,37 +63,23 @@ do
 
     ###read test
 
-    #bg wakeup
-    fio --ioengine=libaio --name="wakeup" --rw=randread --bs=4K --filename=$DATA_DEV --direct=1 --iodepth=1 --offset=0 --size=4K --norandommap --time_based --runtime=24h --thinktime=0.5s --thinktime_blocks=1 &
-    bg_pid=$!
-
-    sleep 1
-  
     echo $NR_DF > /sys/block/$DATA_NAME/queue/nr_requests
     cat /sys/block/$DATA_NAME/queue/nr_requests
-    for i in {1..1}
-    do
-        echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
-        sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null 
-        sleep 5
-        sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null 
-        sleep 5
-        dd if="${TARGET_FOLDER}T$D.data" of=/dev/null bs=$SFS iflag=direct >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt 2>&1
-    done
+    echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
+    mkdir $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D
+    blktrace -d /dev/nvme0n1 -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/trace_output.blktrace -w 60
+    fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=DF --iodepth=1023 >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
+    blkparse $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/trace_output.blktrace -d $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/parsed_output.blkparse
+    btt -i $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/parsed_output.blkparse -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/btt_output.txt
 
     echo $NR_SG > /sys/block/$DATA_NAME/queue/nr_requests
     cat /sys/block/$DATA_NAME/queue/nr_requests
-    for i in {1..1}
-    do
-        echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
-        sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null 
-        sleep 5
-        sync; echo 3 | sudo tee /proc/sys/vm/drop_caches >/dev/null 
-        sleep 5
-        dd if="${TARGET_FOLDER}T$D.data" of=/dev/null bs=$SFS iflag=direct >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt 2>&1
-    done
-
-    echo $NR_DF > /sys/block/$DATA_NAME/queue/nr_requests
+    echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
+    mkdir $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D
+    blktrace -d /dev/nvme0n1 -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/trace_output.blktrace -w 60
+    fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=SG --iodepth=1 >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
+    blkparse $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/trace_output.blktrace -d $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/parsed_output.blkparse
+    btt -i $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/parsed_output.blkparse -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/btt_output.txt
 
     #kill bg wakeup
     kill $bg_pid
@@ -104,14 +90,10 @@ do
 
     umount $TARGET_FOLDER
     sleep 1
-    printf "d\nw\n" | sudo fdisk $DATA_DEV
-    printf "d\nw\n" | sudo fdisk $JOURNAL_DEV
+    printf "d\n1\nw\n" | sudo fdisk $DATA_DEV
+    printf "d\n1\nw\n" | sudo fdisk $JOURNAL_DEV
 
     #enable meta write
     ./enablemeta.sh
 
 done
-
-
-
-

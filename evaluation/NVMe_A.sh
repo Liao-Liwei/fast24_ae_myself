@@ -1,4 +1,4 @@
-DATA_NAME="nvme2n1"
+DATA_NAME="nvme0n1"
 RESULT_NAME="NVMe-A"
 
 KB=1024
