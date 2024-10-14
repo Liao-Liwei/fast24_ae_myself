@@ -9,7 +9,8 @@ EXE_PATH="append_maker"
 
 NR_SG=1
 NR_DF=1023
-SFS="8192K"
+SFS="1024K"
+# SFS="8192K"
 
 OPT_DIRECT=0
 OPT_DEFAULT=1
@@ -22,9 +23,9 @@ do
     DATA_DEV="/dev/"$DATA_NAME""
     DATA_PAT="/dev/"$DATA_PAT_NAME""
 
-    JOURNAL_PAT_NAME=""$JOURNAL_NAME"p2"
-    JOURNAL_DEV="/dev/"$JOURNAL_NAME""
-    JOURNAL_PAT="/dev/"$JOURNAL_PAT_NAME""
+    # JOURNAL_PAT_NAME=""$JOURNAL_NAME"p2"
+    # JOURNAL_DEV="/dev/"$JOURNAL_NAME""
+    # JOURNAL_PAT="/dev/"$JOURNAL_PAT_NAME""
 
     ####trim, fdisk, mount
     source trim_NVMe.sh
@@ -33,11 +34,11 @@ do
     ./disablemeta.sh
 
     ###format mount
-    printf "n\np\n1\n1\n+35G\nw\n" | sudo fdisk $DATA_DEV
-    printf "n\np\n1\n2\n+2G\nw\n" | sudo fdisk $JOURNAL_DEV
+    printf "n\np\n\n\n+35G\nw\n" | sudo fdisk $DATA_DEV
+    # printf "n\np\n2\n\n+2G\nw\n" | sudo fdisk $JOURNAL_DEV
 
-    mkfs.ext4 -F -O journal_dev -b 4096 $JOURNAL_PAT
-    mkfs.ext4 -F -J device=$JOURNAL_PAT -m 0 -b 4096 $DATA_PAT
+    # mkfs.ext4 -F -O journal_dev -b 4096 $JOURNAL_PAT
+    mkfs.ext4 -F -O ^has_journal -m 0 -b 4096 $DATA_PAT
 
     mount -o nodelalloc $DATA_PAT $TARGET_FOLDER
     echo 0 > /sys/fs/ext4/$DATA_PAT_NAME/reserved_clusters
@@ -66,20 +67,12 @@ do
     echo $NR_DF > /sys/block/$DATA_NAME/queue/nr_requests
     cat /sys/block/$DATA_NAME/queue/nr_requests
     echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
-    mkdir $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D
-    blktrace -d /dev/nvme0n1 -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/trace_output.blktrace -w 60
     fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=DF --iodepth=1023 >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
-    blkparse $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/trace_output.blktrace -d $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/parsed_output.blkparse
-    btt -i $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/parsed_output.blkparse -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF"$D/btt_output.txt
 
-    echo $NR_SG > /sys/block/$DATA_NAME/queue/nr_requests
-    cat /sys/block/$DATA_NAME/queue/nr_requests
-    echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
-    mkdir $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D
-    blktrace -d /dev/nvme0n1 -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/trace_output.blktrace -w 60
-    fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=SG --iodepth=1 >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
-    blkparse $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/trace_output.blktrace -d $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/parsed_output.blkparse
-    btt -i $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/parsed_output.blkparse -o $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG"$D/btt_output.txt
+    # echo $NR_SG > /sys/block/$DATA_NAME/queue/nr_requests
+    # cat /sys/block/$DATA_NAME/queue/nr_requests
+    # echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
+    # fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=SG --iodepth=1 >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
 
     #kill bg wakeup
     kill $bg_pid
@@ -90,8 +83,8 @@ do
 
     umount $TARGET_FOLDER
     sleep 1
-    printf "d\n1\nw\n" | sudo fdisk $DATA_DEV
-    printf "d\n1\nw\n" | sudo fdisk $JOURNAL_DEV
+    printf "d\n\nw\n" | sudo fdisk $DATA_DEV
+    # printf "d\n1\nw\n" | sudo fdisk $JOURNAL_DEV
 
     #enable meta write
     ./enablemeta.sh
