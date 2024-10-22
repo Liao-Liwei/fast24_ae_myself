@@ -8,13 +8,13 @@ SRC_PATH="./hypothetical/append_maker.cpp"
 EXE_PATH="append_maker"
 
 NR_SG=1
-NR_DF=1023
-SFS="1024K"
-# SFS="8192K"
+NR_DF=256
+# SFS="1024K"
+SFS="8192K"
 
 OPT_DIRECT=0
 OPT_DEFAULT=1
-
+# nvme admin-passthru /dev/nvme0n1 --opcode=0xef --cdw10=4
 DRANGE="1 2 4 8 16 32 64 128 256"
 for D in $DRANGE
 do
@@ -67,8 +67,9 @@ do
     echo $NR_DF > /sys/block/$DATA_NAME/queue/nr_requests
     cat /sys/block/$DATA_NAME/queue/nr_requests
     echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
-    fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=DF --iodepth=1023 >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
-
+    nvme admin-passthru /dev/nvme0n1 --opcode=0xef --cdw10=8
+    fio --filename=${TARGET_FOLDER}T$D.data --direct=1 --rw=read --bs=$SFS --ioengine=libaio --runtime=60 --time_based --name=DF --iodepth=$NR_DF >> $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_DF".txt
+    nvme admin-passthru /dev/nvme0n1 --opcode=0xef --cdw10=9
     # echo $NR_SG > /sys/block/$DATA_NAME/queue/nr_requests
     # cat /sys/block/$DATA_NAME/queue/nr_requests
     # echo DOF$D start | tee -a $RESULT_FOLDER"vd_$RESULT_NAME"_QD"$NR_SG".txt
@@ -90,3 +91,4 @@ do
     ./enablemeta.sh
 
 done
+# nvme admin-passthru /dev/nvme0n1 --opcode=0xef --cdw10=3
